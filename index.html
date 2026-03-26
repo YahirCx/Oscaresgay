@@ -2,86 +2,100 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>OSCAR DESCENT: OVERDRIVE</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>OSCAR DESCENT: MOBILE OVERDRIVE</title>
     <style>
-        body { margin: 0; background: #020205; display: flex; align-items: center; justify-content: center; height: 100vh; color: #fff; font-family: 'Arial Black', sans-serif; overflow: hidden; }
-        canvas { border: 2px solid #00f2ff; box-shadow: 0 0 50px rgba(0, 242, 255, 0.2); background: #000; cursor: crosshair; }
-        #ui { position: absolute; top: 20px; text-align: center; pointer-events: none; width: 100%; z-index: 5; }
-        .glitch { font-size: 24px; animation: glitch 1s infinite; text-shadow: 2px 2px #ff00f7; }
-        @keyframes glitch { 0% { transform: skew(0deg); } 20% { transform: skew(3deg); color: #ff00f7; } 40% { transform: skew(-3deg); } 100% { transform: skew(0deg); } }
-        #win { position: absolute; font-size: 60px; color: #ff00f7; text-shadow: 0 0 30px #ff00f7; display: none; z-index: 10; text-align: center; }
+        body { margin: 0; background: #020205; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; color: #fff; font-family: 'Arial Black', sans-serif; overflow: hidden; touch-action: none; }
+        canvas { border: 2px solid #00f2ff; background: #000; max-width: 100%; max-height: 80vh; }
+        #controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; max-width: 400px; padding: 20px; box-sizing: border-box; }
+        .btn { background: rgba(255, 255, 255, 0.1); border: 2px solid #00f2ff; color: #00f2ff; padding: 20px; text-align: center; border-radius: 10px; user-select: none; -webkit-user-select: none; }
+        .btn:active { background: #00f2ff; color: #000; }
+        #win { position: absolute; font-size: 40px; color: #ff00f7; text-shadow: 0 0 20px #ff00f7; display: none; z-index: 10; text-align: center; pointer-events: none; }
     </style>
 </head>
 <body>
-    <div id="ui"><h1 class="glitch">OSCAR DESCENT: OVERDRIVE</h1></div>
     <div id="win">OSCAR<br>PENDEJO</div>
     <canvas id="g"></canvas>
+    
+    <div id="controls">
+        <div class="btn" id="btnL">←</div>
+        <div class="btn" id="btnU">↑ / JUMP</div>
+        <div class="btn" id="btnR">→</div>
+        <div></div>
+        <div class="btn" id="btnD">↓</div>
+    </div>
 
 <script>
 const canvas = document.getElementById('g');
 const ctx = canvas.getContext('2d');
-canvas.width = 400; canvas.height = 600;
+canvas.width = 400; canvas.height = 500;
 
-// Audio Engine
+// Audio
 const ac = new (window.AudioContext || window.webkitAudioContext)();
-const sfx = (f, d, t = 'sine') => {
+const sfx = (f, d) => {
     const o = ac.createOscillator(), g = ac.createGain();
-    o.type = t; o.frequency.setValueAtTime(f, ac.currentTime);
-    g.gain.setValueAtTime(0.1, ac.currentTime);
+    o.frequency.setValueAtTime(f, ac.currentTime);
     g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + d);
     o.connect(g); g.connect(ac.destination);
     o.start(); o.stop(ac.currentTime + d);
 };
 
-// Game State
-const p = { x: 50, y: 30, w: 20, h: 20, vx: 0, vy: 0, speed: 4, jump: -8, onG: false, onL: false, trail: [] };
+const p = { x: 50, y: 30, w: 20, h: 20, vx: 0, vy: 0, speed: 4, jump: -8, onG: false, onL: false };
 const platforms = [
-    {x: 0, y: 100, w: 300}, {x: 100, y: 250, w: 300}, {x: 0, y: 400, w: 250},
-    {x: 150, y: 550, w: 250}, {x: 0, y: 700, w: 300}, {x: 0, y: 850, w: 400, goal: true}
+    {x: 0, y: 100, w: 320}, {x: 80, y: 220, w: 320}, {x: 0, y: 350, w: 280},
+    {x: 120, y: 480, w: 280}, {x: 0, y: 620, w: 350}, {x: 0, y: 750, w: 400, goal: true}
 ];
-const ladders = [{x: 240, y: 100, h: 150}, {x: 120, y: 250, h: 150}, {x: 200, y: 400, h: 150}, {x: 50, y: 550, h: 150}, {x: 320, y: 700, h: 150}];
-const particles = [];
-let camY = 0, shake = 0;
+const ladders = [{x: 280, y: 100, h: 120}, {x: 100, y: 220, h: 130}, {x: 240, y: 350, h: 130}, {x: 140, y: 480, h: 140}, {x: 20, y: 620, h: 130}];
+const enemies = platforms.slice(1, -1).map(plt => ({
+    x: plt.x + 10, y: plt.y - 22, w: 20, h: 20, min: plt.x, max: plt.x + plt.w - 20, dir: 1.5
+}));
 
-const keys = {};
-window.onkeydown = e => { keys[e.code] = true; if(ac.state === 'suspended') ac.resume(); };
+let camY = 0, keys = {};
+window.onkeydown = e => { keys[e.code] = true; if(ac.state==='suspended') ac.resume(); };
 window.onkeyup = e => keys[e.code] = false;
 
-function update() {
-    if (shake > 0) shake -= 0.5;
-    
-    // Movimiento
-    p.vx = (keys['ArrowLeft'] || keys['KeyA']) ? -p.speed : (keys['ArrowRight'] || keys['KeyD']) ? p.speed : 0;
+// Touch Events
+const setupBtn = (id, key) => {
+    const el = document.getElementById(id);
+    el.ontouchstart = (e) => { e.preventDefault(); keys[key] = true; if(ac.state==='suspended') ac.resume(); };
+    el.ontouchend = (e) => { e.preventDefault(); keys[key] = false; };
+};
+setupBtn('btnL', 'ArrowLeft'); setupBtn('btnR', 'ArrowRight');
+setupBtn('btnU', 'ArrowUp'); setupBtn('btnD', 'ArrowDown');
 
-    // Lógica Escalera
+function update() {
+    p.vx = (keys['ArrowLeft'] || keys['KeyA']) ? -p.speed : (keys['ArrowRight'] || keys['KeyD']) ? p.speed : 0;
     p.onL = ladders.some(l => p.x + p.w > l.x && p.x < l.x + 20 && p.y + p.h > l.y && p.y < l.y + l.h);
 
     if (p.onL) {
         p.vy = (keys['ArrowUp'] || keys['KeyW']) ? -p.speed : (keys['ArrowDown'] || keys['KeyS']) ? p.speed : 0;
     } else {
-        p.vy += 0.4; // Gravedad
-        if ((keys['ArrowUp'] || keys['KeyW'] || keys['Space']) && p.onG) { p.vy = p.jump; sfx(200, 0.1, 'triangle'); }
+        p.vy += 0.4;
+        if ((keys['ArrowUp'] || keys['KeyW'] || keys['Space']) && p.onG) { p.vy = p.jump; sfx(300, 0.1); }
     }
 
     p.x += p.vx; p.y += p.vy; p.onG = false;
 
-    // Trail particles
-    if (Math.abs(p.vx) > 0 || Math.abs(p.vy) > 1) {
-        p.trail.push({x: p.x + p.w/2, y: p.y + p.h/2, life: 10});
-    }
-    p.trail = p.trail.filter(t => t.life-- > 0);
+    // Collider Orillas
+    if (p.x < 0) p.x = 0;
+    if (p.x + p.w > canvas.width) p.x = canvas.width - p.w;
 
-    // Colisiones
+    // Colisión Plataformas
     platforms.forEach(plat => {
         if (p.vy > 0 && p.x + p.w > plat.x && p.x < plat.x + plat.w && p.y + p.h > plat.y && p.y + p.h < plat.y + 15) {
             if (!(p.onL && (keys['ArrowDown'] || keys['KeyS']))) {
                 p.y = plat.y - p.h; p.vy = 0; p.onG = true;
-                if(plat.goal) { 
-                    shake = 20; sfx(100, 0.5, 'sawtooth');
-                    document.getElementById('win').style.display = 'block';
-                    setTimeout(() => location.reload(), 2500);
-                }
+                if(plat.goal) { document.getElementById('win').style.display='block'; sfx(500, 0.5); setTimeout(()=>location.reload(), 3000); }
             }
+        }
+    });
+
+    // Enemigos Oscar
+    enemies.forEach(en => {
+        en.x += en.dir;
+        if (en.x <= en.min || en.x >= en.max) en.dir *= -1;
+        if (p.x < en.x+en.w && p.x+p.w > en.x && p.y < en.y+en.h && p.y+p.h > en.y) {
+            sfx(100, 0.2); p.x = 50; p.y = 30; // Muerte
         }
     });
 
@@ -89,40 +103,34 @@ function update() {
 }
 
 function draw() {
-    ctx.save();
-    if (shake > 0) ctx.translate(Math.random()*shake - shake/2, Math.random()*shake - shake/2);
     ctx.setTransform(1,0,0,1,0, -camY);
-    ctx.fillStyle = 'rgba(0,0,0,0.3)'; // Motion blur effect
-    ctx.fillRect(0, camY, canvas.width, canvas.height);
+    ctx.fillStyle = '#050505'; ctx.fillRect(0, camY, canvas.width, canvas.height);
 
-    // Trail
-    p.trail.forEach(t => {
-        ctx.fillStyle = `rgba(0, 242, 255, ${t.life/10})`;
-        ctx.fillRect(t.x, t.y, 4, 4);
-    });
+    // Rejilla fondo
+    ctx.strokeStyle = '#111';
+    for(let i=0; i<1000; i+=50) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(400,i); ctx.stroke(); }
 
-    // Escaleras
     ladders.forEach(l => {
-        ctx.strokeStyle = '#00f2ff'; ctx.lineWidth = 3;
+        ctx.strokeStyle = '#00f2ff'; ctx.lineWidth = 2;
         ctx.strokeRect(l.x, l.y, 20, l.h);
-        for(let i=0; i<l.h; i+=15) { ctx.beginPath(); ctx.moveTo(l.x, l.y+i); ctx.lineTo(l.x+20, l.y+i); ctx.stroke(); }
+        for(let i=5; i<l.h; i+=15) { ctx.beginPath(); ctx.moveTo(l.x, l.y+i); ctx.lineTo(l.x+20, l.y+i); ctx.stroke(); }
     });
 
-    // Plataformas
     platforms.forEach(plat => {
-        const grad = ctx.createLinearGradient(plat.x, plat.y, plat.x + plat.w, plat.y);
-        grad.addColorStop(0, plat.goal ? '#ff00f7' : '#00f2ff');
-        grad.addColorStop(1, '#0055ff');
-        ctx.fillStyle = grad;
-        ctx.shadowBlur = 15; ctx.shadowColor = plat.goal ? '#ff00f7' : '#00f2ff';
+        ctx.fillStyle = plat.goal ? '#ff00f7' : '#3498db';
+        ctx.shadowBlur = 10; ctx.shadowColor = ctx.fillStyle;
         ctx.fillRect(plat.x, plat.y, plat.w, 8);
     });
 
-    // Jugador
-    ctx.fillStyle = '#fff';
-    ctx.shadowBlur = 20; ctx.shadowColor = '#fff';
+    enemies.forEach(en => {
+        ctx.fillStyle = '#ff0000'; ctx.shadowBlur = 15;
+        ctx.fillRect(en.x, en.y, en.w, en.h);
+        ctx.fillStyle = '#fff'; ctx.font = '10px Arial'; ctx.fillText("OSCAR", en.x-5, en.y-5);
+    });
+
+    ctx.fillStyle = '#fff'; ctx.shadowBlur = 15; ctx.shadowColor = '#fff';
     ctx.fillRect(p.x, p.y, p.w, p.h);
-    ctx.restore();
+    ctx.shadowBlur = 0;
 
     requestAnimationFrame(() => { update(); draw(); });
 }
