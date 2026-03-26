@@ -2,15 +2,20 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Mi Super Calculadora</title>
+    <title>Calculadora v2.1</title>
     <style>
-        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #222; }
-        .calc { background: #333; padding: 20px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        input { width: 100%; height: 50px; font-size: 24px; text-align: right; margin-bottom: 10px; border: none; border-radius: 5px; padding: 5px; box-sizing: border-box; }
-        .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-        button { padding: 20px; font-size: 18px; border: none; border-radius: 5px; cursor: pointer; transition: 0.2s; }
-        button:hover { background: #ddd; }
-        .op { background: #f39c12; color: white; }
+        body { font-family: 'Courier New', monospace; display: flex; justify-content: center; align-items: center; height: 100vh; background: #111; color: #eee; }
+        .calc { background: #222; padding: 25px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.7); }
+        input { width: 100%; height: 60px; font-size: 28px; text-align: right; margin-bottom: 15px; border: 2px solid #444; border-radius: 8px; padding: 10px; box-sizing: border-box; background: #333; color: #fff; }
+        .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+        button { padding: 22px; font-size: 20px; border: none; border-radius: 8px; cursor: pointer; transition: 0.2s; background: #444; color: #fff; }
+        button:hover { background: #555; }
+        .op { background: #d35400; color: white; }
+        .op:hover { background: #e67e22; }
+        .eq { background: #27ae60; color: white; grid-column: span 2; }
+        .eq:hover { background: #2ecc71; }
+        .clr { background: #c0392b; color: white; }
+        .clr:hover { background: #e74c3c; }
     </style>
 </head>
 <body>
@@ -18,7 +23,7 @@
 <div class="calc">
     <input id="pantalla" readonly>
     <div class="grid">
-        <button onclick="limpiar()">C</button>
+        <button class="clr" onclick="limpiar()">C</button>
         <button onclick="agregar('(')">(</button>
         <button onclick="agregar(')')">)</button>
         <button class="op" onclick="agregar('/')">/</button>
@@ -34,9 +39,9 @@
         <button onclick="agregar('2')">2</button>
         <button onclick="agregar('3')">3</button>
         <button class="op" onclick="agregar('+')">+</button>
-        <button onclick="agregar('0')" style="grid-column: span 2;">0</button>
+        <button onclick="agregar('0')">0</button>
         <button onclick="agregar('.')">.</button>
-        <button class="op" onclick="calcular()">=</button>
+        <button class="eq" onclick="calcular()">=</button>
     </div>
 </div>
 
@@ -45,8 +50,19 @@
     const agregar = (v) => p.value += v;
     const limpiar = () => p.value = '';
     const calcular = () => {
-        try { p.value = eval(p.value); } 
-        catch { p.value = "Error"; setTimeout(limpiar, 1000); }
+        try {
+            let resultado = eval(p.value);
+            // LA LÓGICA PERSONALIZADA
+            if (resultado === 42) {
+                p.value = "Oscar pendejo";
+            } else {
+                p.value = resultado;
+            }
+        } 
+        catch { 
+            p.value = "Error"; 
+            setTimeout(limpiar, 1200); 
+        }
     }
 </script>
 
