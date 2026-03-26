@@ -2,122 +2,137 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Oscar's Descent</title>
+    <title>Oscar Descent: Galaxy Edition</title>
     <style>
-        body { margin: 0; background: #000; display: flex; flex-direction: column; align-items: center; color: white; font-family: sans-serif; overflow: hidden; }
-        canvas { border: 4px solid #333; background: #111; margin-top: 20px; }
-        .instrucciones { margin-top: 10px; color: #aaa; }
+        body { margin: 0; background: #050505; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; color: #fff; font-family: 'Courier New', Courier, monospace; overflow: hidden; }
+        canvas { border: 3px solid #444; box-shadow: 0 0 20px rgba(255,255,255,0.1); background: linear-gradient(#000, #020215); cursor: none; }
+        .ui { position: absolute; top: 10px; text-align: center; pointer-events: none; text-shadow: 2px 2px #000; }
     </style>
 </head>
 <body>
-    <h2>Baja las escaleras (No seas como Oscar)</h2>
-    <canvas id="gameCanvas" width="400" height="600"></canvas>
-    <div class="instrucciones">Flechas para moverte y subir/bajar escaleras</div>
+    <div class="ui">
+        <h1>OSCAR'S DESCENT</h1>
+        <p>Usa Flechas o WASD | Baja hasta la meta</p>
+    </div>
+    <canvas id="g"></canvas>
 
 <script>
-const canvas = document.getElementById('gameCanvas');
+const canvas = document.getElementById('g');
 const ctx = canvas.getContext('2d');
+canvas.width = 400; canvas.height = 500;
 
-const player = {
-    x: 50, y: 20, w: 20, h: 20,
-    vx: 0, vy: 0,
-    speed: 3,
-    onLadder: false
-};
-
-// Definición del nivel (Plataformas y Escaleras)
+// Configuración del juego
+const GRAVITY = 0.4;
+const player = { x: 50, y: 30, w: 20, h: 20, vx: 0, vy: 0, speed: 3, jump: -7, onG: false, onL: false };
 const platforms = [
-    {x: 0, y: 50, w: 400, h: 10},   // Piso 0
-    {x: 0, y: 150, w: 300, h: 10},  // Piso 1
-    {x: 100, y: 250, w: 300, h: 10}, // Piso 2
-    {x: 0, y: 350, w: 250, h: 10},  // Piso 3
-    {x: 150, y: 450, w: 250, h: 10}, // Piso 4
-    {x: 0, y: 550, w: 400, h: 10}   // Meta
+    {x: 0, y: 60, w: 300}, {x: 100, y: 160, w: 300}, {x: 0, y: 280, w: 250},
+    {x: 150, y: 400, w: 250}, {x: 50, y: 520, w: 300}, {x: 0, y: 650, w: 400, goal: true}
 ];
-
 const ladders = [
-    {x: 250, y: 50, w: 30, h: 100},
-    {x: 120, y: 150, w: 30, h: 100},
-    {x: 200, y: 250, w: 30, h: 100},
-    {x: 50, y: 350, w: 30, h: 100},
-    {x: 300, y: 450, w: 30, h: 100}
+    {x: 240, y: 60, h: 100}, {x: 120, y: 160, h: 120}, 
+    {x: 200, y: 280, h: 120}, {x: 60, y: 400, h: 120}, {x: 320, y: 520, h: 130}
+];
+const enemies = [
+    {x: 150, y: 140, w: 20, range: 100, dir: 1, startX: 150},
+    {x: 50, y: 260, w: 20, range: 150, dir: 1, startX: 50},
+    {x: 200, y: 500, w: 20, range: 80, dir: -1, startX: 200}
 ];
 
+let camY = 0;
 const keys = {};
-window.addEventListener('keydown', e => keys[e.code] = true);
-window.addEventListener('keyup', e => keys[e.code] = false);
+window.onkeydown = e => keys[e.code] = true;
+window.onkeyup = e => keys[e.code] = false;
 
 function update() {
-    // Movimiento lateral
-    if (keys['ArrowLeft']) player.x -= player.speed;
-    if (keys['ArrowRight']) player.x += player.speed;
+    // Controles
+    if (keys['ArrowLeft'] || keys['KeyA']) player.vx = -player.speed;
+    else if (keys['ArrowRight'] || keys['KeyD']) player.vx = player.speed;
+    else player.vx = 0;
 
-    // Detectar si está en una escalera
-    player.onLadder = false;
+    // Detectar Escalera
+    player.onL = false;
     ladders.forEach(l => {
-        if (player.x + player.w > l.x && player.x < l.x + l.w &&
-            player.y + player.h > l.y && player.y < l.y + l.h) {
-            player.onLadder = true;
-        }
+        if (player.x + player.w > l.x && player.x < l.x + 20 && player.y + player.h > l.y && player.y < l.y + l.h) player.onL = true;
     });
 
-    if (player.onLadder) {
+    if (player.onL) {
         player.vy = 0;
-        if (keys['ArrowUp']) player.vy = -player.speed;
-        if (keys['ArrowDown']) player.vy = player.speed;
+        if (keys['ArrowUp'] || keys['KeyW']) player.vy = -player.speed;
+        if (keys['ArrowDown'] || keys['KeyS']) player.vy = player.speed;
     } else {
-        // Gravedad si no está en escalera
-        player.vy = 2; 
+        player.vy += GRAVITY;
+        if ((keys['ArrowUp'] || keys['KeyW'] || keys['Space']) && player.onG) player.vy = player.jump;
     }
 
+    player.x += player.vx;
     player.y += player.vy;
+    player.onG = false;
 
-    // Colisión con plataformas (solo si cae)
+    // Colisión Plataformas
     platforms.forEach(p => {
-        if (player.vy >= 0 && 
-            player.x + player.w > p.x && player.x < p.x + p.w &&
-            player.y + player.h > p.y && player.y + player.h < p.y + p.h + 5) {
-            if (!keys['ArrowDown'] || !player.onLadder) {
+        if (player.vy > 0 && player.x + player.w > p.x && player.x < p.x + p.w && player.y + player.h > p.y && player.y + player.h < p.y + 15) {
+            if (!(player.onL && (keys['ArrowDown'] || keys['KeyS']))) {
                 player.y = p.y - player.h;
+                player.vy = 0;
+                player.onG = true;
+                if(p.goal) { alert("¡Nivel Completado! Oscar pendejo."); location.reload(); }
             }
         }
     });
 
-    // Mensaje final (Easter Egg)
-    if (player.y > 530) {
-        alert("¡Ganaste! Oscar pendejo.");
-        player.y = 20; player.x = 50;
-    }
-}
-
-function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Dibujar Escaleras
-    ctx.fillStyle = '#555';
-    ladders.forEach(l => {
-        ctx.fillRect(l.x, l.y, l.w, l.h);
-        // Peldaños
-        ctx.strokeStyle = '#888';
-        for(let i = 0; i < l.h; i+=10) {
-            ctx.beginPath(); ctx.moveTo(l.x, l.y+i); ctx.lineTo(l.x+l.w, l.y+i); ctx.stroke();
+    // Enemigos
+    enemies.forEach(en => {
+        en.x += en.dir * 1.5;
+        if (Math.abs(en.x - en.startX) > en.range) en.dir *= -1;
+        // Colisión con jugador
+        if (player.x < en.x + en.w && player.x + player.w > en.x && player.y < en.y + 20 && player.y + player.h > en.y) {
+            player.x = 50; player.y = 30; // Reset
         }
     });
 
-    // Dibujar Plataformas
-    ctx.fillStyle = '#27ae60';
-    platforms.forEach(p => ctx.fillRect(p.x, p.y, p.w, p.h));
-
-    // Dibujar Jugador
-    ctx.fillStyle = '#e74c3c';
-    ctx.fillRect(player.x, player.y, player.w, player.h);
-
-    requestAnimationFrame(() => {
-        update();
-        draw();
-    });
+    // Cámara sigue al jugador (suave)
+    camY += (player.y - camY - 200) * 0.1;
 }
 
+function draw() {
+    ctx.setTransform(1,0,0,1,0, -camY); // Mover cámara
+    ctx.clearRect(0, camY, canvas.width, canvas.height);
+
+    // Fondo Estrellas
+    ctx.fillStyle = "#fff";
+    for(let i=0; i<50; i++) ctx.fillRect((i*137)%400, (i*149 + camY*0.5)%800, 1, 1);
+
+    // Dibujar Escaleras
+    ladders.forEach(l => {
+        ctx.fillStyle = "#444";
+        ctx.fillRect(l.x, l.y, 20, l.h);
+        ctx.strokeStyle = "#888";
+        for(let i=0; i<l.h; i+=10) { ctx.strokeRect(l.x, l.y+i, 20, 1); }
+    });
+
+    // Dibujar Plataformas
+    platforms.forEach(p => {
+        ctx.fillStyle = p.goal ? "#27ae60" : "#3498db";
+        ctx.fillRect(p.x, p.y, p.w, 10);
+        if(p.goal) { ctx.fillStyle="#fff"; ctx.fillText("META", p.x+p.w/2-15, p.y+25); }
+    });
+
+    // Dibujar Enemigos (Oscar)
+    enemies.forEach(en => {
+        ctx.fillStyle = "#ff4757";
+        ctx.fillRect(en.x, en.y, en.w, 20);
+        ctx.fillStyle = "#fff"; ctx.font = "8px Arial";
+        ctx.fillText("OSCAR", en.x, en.y-5);
+    });
+
+    // Dibujar Jugador
+    ctx.fillStyle = "#f1c40f";
+    ctx.shadowBlur = 10; ctx.shadowColor = "#f1c40f";
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+    ctx.shadowBlur = 0;
+
+    requestAnimationFrame(() => { update(); draw(); });
+}
 draw();
 </script>
 </body>
